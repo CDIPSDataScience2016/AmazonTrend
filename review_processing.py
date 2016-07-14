@@ -1,6 +1,6 @@
 """ This class deals with processing raw reviews/meta data
 
-Time-stamp: <2016-07-13 17:24:30 yaningliu>
+Time-stamp: <2016-07-13 23:16:59 yaningliu>
 
 Author: Yaning Liu
 Main used modules arebeautifulsoup, pandas
@@ -36,9 +36,9 @@ class review_processing:
     def clean_reviews(self, col_name_clean, clean_method='BeautifulSoup',
                       remove_numbers=True, remove_punct=True,
                       output_to_file=False, output_file_type=None,
-                      output_file_name=None):
+                      output_file_name=None, append_sentiment=False,
+                      append_based_on=None, sentiment_col_name=None):
         """Clean all reviews and output the data if
-        output_to_file=True
 
         :param col_name_clean: the name of the column to be cleaned
         :param clean_method: string, the method for cleaning, e.g.,
@@ -49,22 +49,30 @@ class review_processing:
         output_file_name has to be provided
         :param output_file_type: string, the file type of output, e.g., 'csv'
         :param output_file_name: string, the output file name
+        :param append_sentiment: boolean, if append sentiment
+        :param append_based_on: the keyword based on which sentiment is computed
+        :param sentiment_col_name: the keyword/column names of sentiment
         :returns: if output_to_file=True, returns nothing;
         otherwise returns df_clean_reviews, a pandas data frame
         :rtype: pandas data frame, if output_to_file='False'
 
         """
-
         print('Cleaning all reviews')
         data_dict_list = self.load_data(self.data_file_name_in)
+        if append_sentiment:
+            if append_based_on is None or sentiment_col_name is None:
+                sys.exit('clean_reviews: append_based_on and/or '
+                         'sentiment_col_name have to be provided!')
+            self.label_sentiment_from_stars(data_dict_list, append_based_on,
+                                            sentiment_col_name)
 
         col_names = list(data_dict_list[0].keys())
         nitems = len(data_dict_list)
         ncols = len(col_names)
 
         if col_name_clean in col_names:
-            for i in range(nitems):
-                if (i+1) % 10 == 0:
+            for i in range(100):
+                if (i+1) % 1000 == 0:
                     print('Cleaning the item number {0} output of {1} items'.
                           format(i+1, nitems))
                 data_dict_list[i][col_name_clean] = self.clean_one_review(
@@ -152,3 +160,21 @@ class review_processing:
                       'supported yet!'))
 
         return rev_clean
+
+    @staticmethod
+    def label_sentiment_from_stars(data_dict_list, append_based_on='stars',
+                                   sentiment_col_name='sentiment'):
+        """Append a keyword with name sentiment_col_name and its value to each
+        dictionary of a list of dictionaries. The values are obtained based on
+        the values corresponding to keyword append_based_on. The purpose is to
+        label the data based on stars/overall if sentiment is not labeled
+
+        :param data_dict_list: a list of dictionaries
+        :param append_based_on: the column name/keyword of stars/oveall
+        :param sentiment_col_name: the column name/keyword of sentiment
+        :returns: data_dict_list
+        :rtype: a list of dictionaries
+
+        """
+        for dict in data_dict_list:
+            dict[sentiment_col_name] = 1 if dict[append_based_on] > 3 else 0
