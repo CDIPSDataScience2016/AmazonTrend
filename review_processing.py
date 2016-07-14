@@ -1,6 +1,6 @@
 """ This class deals with processing raw reviews/meta data
 
-Time-stamp: <2016-07-13 17:05:47 yaningliu>
+Time-stamp: <2016-07-13 17:24:30 yaningliu>
 
 Author: Yaning Liu
 Main used modules arebeautifulsoup, pandas
@@ -57,25 +57,28 @@ class review_processing:
 
         print('Cleaning all reviews')
         data_dict_list = self.load_data(self.data_file_name_in)
-        df = pd.DataFrame(data_dict_list)
 
-        print('Data has been prepared into a data frame with {0} items '
-              'and {1} columns'.format(df.shape[0], df.shape[1]))
-
-        col_names = df.columns.values
-        print('The column names are {0}'.format(' '.join(col_names)))
+        col_names = list(data_dict_list[0].keys())
+        nitems = len(data_dict_list)
+        ncols = len(col_names)
 
         if col_name_clean in col_names:
-            for i in range(100):
+            for i in range(nitems):
                 if (i+1) % 10 == 0:
                     print('Cleaning the item number {0} output of {1} items'.
-                          format(i+1, df.shape[0]))
-                df.loc[i,col_name_clean] = self.clean_one_review(
-                    df.loc[i, col_name_clean], clean_method, remove_numbers,
-                    remove_punct)
+                          format(i+1, nitems))
+                data_dict_list[i][col_name_clean] = self.clean_one_review(
+                    data_dict_list[i][col_name_clean], clean_method,
+                    remove_numbers, remove_punct)
         else:
             sys.exit(('clean_reviews: The column name for cleaning is '
                       'not found!'))
+
+        df = pd.DataFrame(data_dict_list)
+        print('Data has been prepared into a data frame with {0} items '
+              'and {1} columns'.format(nitems, ncols))
+
+        print('The column names are {0}'.format(' '.join(col_names)))
 
         for col_name in self.col_names_kept:
             if col_name not in col_names:
