@@ -1,6 +1,6 @@
 """ This class deals with processing raw reviews/meta data
 
-Time-stamp: <2016-07-13 23:16:59 yaningliu>
+Time-stamp: <2016-07-14 11:08:53 yaningliu>
 
 Author: Yaning Liu
 Main used modules arebeautifulsoup, pandas
@@ -12,6 +12,7 @@ import json
 import pandas as pd
 from bs4 import BeautifulSoup
 import re
+import csv
 
 
 class review_processing:
@@ -33,7 +34,8 @@ class review_processing:
         self.data_file_name_out = data_file_name_out
         self.col_names_kept = col_names_kept
 
-    def clean_reviews(self, col_name_clean, clean_method='BeautifulSoup',
+    def clean_reviews(self, col_name_clean, nentries=-1,
+                      clean_method='BeautifulSoup',
                       remove_numbers=True, remove_punct=True,
                       output_to_file=False, output_file_type=None,
                       output_file_name=None, append_sentiment=False,
@@ -41,6 +43,8 @@ class review_processing:
         """Clean all reviews and output the data if
 
         :param col_name_clean: the name of the column to be cleaned
+        :param nentries: specify the number of entries to load, if negative,
+        load all entries
         :param clean_method: string, the method for cleaning, e.g.,
         BeautifulSoup
         :param remove_numbers: boolean if remove numbers
@@ -50,15 +54,15 @@ class review_processing:
         :param output_file_type: string, the file type of output, e.g., 'csv'
         :param output_file_name: string, the output file name
         :param append_sentiment: boolean, if append sentiment
-        :param append_based_on: the keyword based on which sentiment is computed
+        :param append_based_on: the keyword based on which sentiment is
+        computed
         :param sentiment_col_name: the keyword/column names of sentiment
-        :returns: if output_to_file=True, returns nothing;
-        otherwise returns df_clean_reviews, a pandas data frame
-        :rtype: pandas data frame, if output_to_file='False'
+        :returns: returns clean_reviews
+        :rtype: a list of dictionaries, if output_to_file='False'
 
         """
         print('Cleaning all reviews')
-        data_dict_list = self.load_data(self.data_file_name_in)
+        data_dict_list = self.load_data(self.data_file_name_in, nentries)
         if append_sentiment:
             if append_based_on is None or sentiment_col_name is None:
                 sys.exit('clean_reviews: append_based_on and/or '
@@ -71,7 +75,7 @@ class review_processing:
         ncols = len(col_names)
 
         if col_name_clean in col_names:
-            for i in range(100):
+            for i in range(nitems):
                 if (i+1) % 1000 == 0:
                     print('Cleaning the item number {0} output of {1} items'.
                           format(i+1, nitems))
@@ -82,10 +86,15 @@ class review_processing:
             sys.exit(('clean_reviews: The column name for cleaning is '
                       'not found!'))
 
-        df = pd.DataFrame(data_dict_list)
-        print('Data has been prepared into a data frame with {0} items '
-              'and {1} columns'.format(nitems, ncols))
+        # Convert the data to pandas frame
+        # df = pd.DataFrame(data_dict_list)
+        # print('Data has been prepared into a data frame with {0} items '
+        #       'and {1} columns'.format(nitems, ncols))
+        #
+        # print('The column names are {0}'.format(' '.join(col_names)))
 
+        print('Data has been cleaned. There are {0} entries '
+              'and {1} columns'.format(nitems, ncols))
         print('The column names are {0}'.format(' '.join(col_names)))
 
         for col_name in self.col_names_kept:
@@ -93,7 +102,9 @@ class review_processing:
                 sys.exit('clean_reviews:The name {0} cannot be found'.format
                          (col_name))
 
-        df_clean_reviews = df[self.col_names_kept]
+        clean_reviews = [{k: v for k, v in iter(dic.items())
+                          if k in self.col_names_kept}
+                         for dic in data_dict_list]
 
         if output_to_file:
             if output_file_type is None or output_file_name is None:
@@ -101,32 +112,49 @@ class review_processing:
                          'to be provided')
             else:
                 if output_file_type == 'csv':
-                    pd.DataFrame.to_csv(output_file_name)
+                    # pd.DataFrame.to_csv(output_file_name)
+                    with open(output_file_name, 'w') as fout:
+                        writer = csv.DictWriter(fout, self.col_names_kept)
+                        writer.writeheader()
+                        writer.writerows(clean_reviews)
                 elif output_file_type == 'json':
-                    pd.DataFrame.to_json(output_file_name)
+                    # pd.DataFrame.to_json(output_file_name)
+                    with open(output_file_name, 'w') as fout:
+                        # This writes the list of dictionaries to
+                        # a single line in the file
+                        json.dump(clean_reviews, fout)
                 else:
                     sys.exit('clean_reviews: Output type not supported yet!')
+                return clean_reviews
         else:
-            return df_clean_reviews
+            return clean_reviews
 
     @staticmethod
-    def load_data(data_file_name_in):
+    def load_data(data_file_name_in, nentries=-1):
         """Load the review data to a list of strings by readlines and
 
         :param data_file_name_in: the raw data file name string
+        :param nentries: specify the number of entries to load, if negative,
+        load all entries
         :returns: data_lines, the processed reviews
         :rtype: list of dictionaries
 
         """
         print('Loading data to a list of dictionaries')
 
-        with open(data_file_name_in, 'r') as fin:
-            data_lines = fin.readlines()
+        if nentries < 0:
+            with open(data_file_name_in, 'r') as fin:
+                data_lines = fin.readlines()
+                len_data = len(data_lines)
 
-        len_data = len(data_lines)
-
-        for i in range(len_data):
-            data_lines[i] = json.loads(data_lines[i])
+                for i in range(len_data):
+                    data_lines[i] = json.loads(data_lines[i])
+        else:
+            data_lines = []
+            with open(data_file_name_in, 'r') as fin:
+                for i in range(nentries):
+                    # readline gives a dictionary directly, instead of a string
+                    data_lines.append(json.loads(fin.readline()))
 
         print('Loading data finished')
         return data_lines
@@ -177,4 +205,4 @@ class review_processing:
 
         """
         for dict in data_dict_list:
-            dict[sentiment_col_name] = 1 if dict[append_based_on] > 3 else 0
+            dict[sentiment_col_name] = 1 if dict[append_based_on] > 3 else -1
