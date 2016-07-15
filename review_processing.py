@@ -1,6 +1,6 @@
 """ This class deals with processing raw reviews/meta data
 
-Time-stamp: <2016-07-14 14:15:25 yaningliu>
+Time-stamp: <2016-07-14 20:50:33 yaningliu>
 
 Author: Yaning Liu
 Main used modules arebeautifulsoup, pandas
@@ -76,32 +76,38 @@ class review_processing:
         ncols = len(col_names)
 
         if col_name_clean in col_names:
-            # for loop takes 415 seconds for video review data
-            # for i in range(nitems):
-            #     if (i+1) % 1000 == 0:
-            #         print('Cleaning the item number {0} output of {1} items'.
-            #               format(i+1, nitems))
-            #     data_dict_list[i][col_name_clean] = self.clean_one_review_str(
-            #         data_dict_list[i][col_name_clean], clean_method,
-            #         remove_numbers, remove_punct)
-            # map takes 415 seconds for video review data
-            # data_dict_list = list(map(lambda dic: self.clean_one_review_dict(
-            #     dic, clean_method, col_name_clean,
-            #     remove_numbers, remove_punct), data_dict_list))
-            # list comprehension takes 413 seconds for video review data
-            # data_dict_list = [self.clean_one_review_dict(
-            #     dic, clean_method, col_name_clean,
-            #     remove_numbers, remove_punct) for dic in data_dict_list]
-
-            # Use Multiprocessing
-            pool = Pool(4)
-            data_dict_list = pool.starmap(self.clean_one_review_dict,
-                                          zip(data_dict_list,
-                                              repeat(clean_method),
-                                              repeat(col_name_clean),
-                                              repeat(remove_numbers),
-                                              repeat(remove_punct)))
-            pool.close()
+            if not self.use_pool:
+                # for loop takes 415 seconds for video review data
+                for i in range(nitems):
+                    if (i+1) % 1000 == 0:
+                        print('Cleaning the item number {0} output of {1} '
+                              'items'.format(i+1, nitems))
+                    data_dict_list[i][
+                        col_name_clean] = self.clean_one_review_str(
+                            data_dict_list[i][col_name_clean], clean_method,
+                            remove_numbers, remove_punct)
+                # # map takes 415 seconds for video review data
+                # data_dict_list = list(map(lambda
+                #                           dic: self.clean_one_review_dict(
+                #                               dic, clean_method,
+                #                               col_name_clean,
+                #                               remove_numbers, remove_punct),
+                #                           data_dict_list))
+                # # list comprehension takes 413 seconds for video review data
+                # data_dict_list = [self.clean_one_review_dict(
+                #     dic, clean_method, col_name_clean,
+                #     remove_numbers, remove_punct) for dic in data_dict_list]
+            if self.use_pool:
+                # Use Multiprocessing
+                # 220s for video review data
+                pool = Pool(4)
+                data_dict_list = pool.starmap(self.clean_one_review_dict,
+                                              zip(data_dict_list,
+                                                  repeat(clean_method),
+                                                  repeat(col_name_clean),
+                                                  repeat(remove_numbers),
+                                                  repeat(remove_punct)))
+                pool.close()
 
         else:
             sys.exit(('clean_reviews: The column name for cleaning is '
