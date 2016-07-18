@@ -1,6 +1,6 @@
 """ This code does sentiment analysis
 
-Time-stamp: <2016-07-14 22:23:49 yaningliu>
+Time-stamp: <2016-07-16 16:52:56 yaning>
 
 Author: Yaning Liu
 Main used modules are nltk, beautifulsoup, scikit-learn, pandas
@@ -12,24 +12,31 @@ import os.path
 import sys
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.naive_bayes import MultinomialNB
+from sklearn.linear_model import SGDClassifier
+from sklearn import svm
 import pandas as pd
-
+from multiprocessing import Pool
 
 class sentiment_analysis:
 
     def __init__(self, NLP_model, ML_method, review_col_name,
                  sentiment_col_name, training_file_name=None,
-                 maxfeature=5000):
+                 maxfeature=5000, use_pool=False, pool_size=None):
         """The initializer of the sentiment_analysis class
 
-        :param training_file_name: the file with training data string
         :param NLP_model: the natural language processing model, e.g.,
         'BagOfWords', 'Word2Vec'
         :param ML_method: the Maching learning methods used, e.g.,
-        'RandomForest'
+        'RandomForest', 'LogisticRegression', 'MultinomialNB', SGDClassifier
+        'SVM'
         :param review_col_name: string, the column name of review texts
         :param sentiment_col_name: string, the column name of sentiment values
         maxfeature: the maximum number of features
+        :param training_file_name: the file with training data string
+        :param maxfeature: the maximum number of feature to use
+        :param nltk_path: the nltk path to append
 
         """
         self.tra_file_name = training_file_name
@@ -38,9 +45,12 @@ class sentiment_analysis:
         self.review_col_name = review_col_name
         self.sentiment_col_name = sentiment_col_name
         self.maxfeature = maxfeature
+        self.use_pool = use_pool
+        self.pool_size = pool_size
 
     def construct_NLP_model(self, df=None, dict_list=None):
-        """Construct natural language processing model
+        """Construct natural language processing model, assume
+        the reviews have been processed
 
         :param df: the loaded, processed, clean data frame.
         If data have been loaded into dataframe, then pass in df, and
@@ -64,9 +74,6 @@ class sentiment_analysis:
                          'found'.format(self.review_col_name,
                                         self.sentiment_col_name))
             review_list = df[self.review_col_name].values.tolist()
-            meaningful_words = map(self.review_to_meaningful_words,
-                                   review_list)
-            # Get training sentiment values
             self.sentiment = df[self.sentiment_col_name].values
         elif dict_list is not None:
             nitems = len(dict_list)
@@ -76,13 +83,8 @@ class sentiment_analysis:
                 sys.exit('construct_NL_model: The name {0}/{1} cannot be '
                          'found'.format(self.review_col_name,
                                         self.sentiment_col_name))
-            meaningful_words = []
-            self.sentiment = []
-            for i in range(nitems):
-                meaningful_words.append(
-                    self.review_to_meaningful_words(dict_list[i][
-                        self.review_col_name]))
-
+            review_list = [dic[self.review_col_name]
+                           for dic in dict_list]
             self.sentiment = [dic[self.sentiment_col_name] for dic in dict_list]
         else:
             if self.training_file_name is None:
@@ -99,35 +101,36 @@ class sentiment_analysis:
                                                     self.sentiment_col_name))
                     # nitems = df.shape[0]
                     review_list = df[self.review_col_name].values.tolist()
-                    meaningful_words = map(self.review_to_meaningful_words,
-                                           review_list)
+                    self.sentiment = df[self.sentiment_col_name].values
                 elif suffix == 'json':
-                    data_dict_list = rp.load_data(self.training_file_name)
+                    data_dict_list = rp.load_json_data(self.training_file_name)
                     if self.review_col_name not in data_dict_list.keys():
                         sys.exit('construct_NL_model: The name {0} cannot be '
                                  'found'.format(self.review_col_name))
-                    review_list = map(lambda x: x[self.review_col_name],
-                                      data_dict_list)
-                    meaningful_words = map(self.review_to_meaningful_words,
-                                           review_list)
+                    review_list = [dic[self.review_col_name] for dic in
+                                   data_dict_list]
+                    self.sentiment = [dic[self.sentiment_col_name] for dic
+                                      in dict_list]
                 else:
                     sys.exit('construct_NLP_model: file type not supported '
                              'yet!')
 
-        # Training process of Bag of Worlds
+        # Training process of Bag of Words
         if self.NLP_model == 'BagOfWords':
             print('construct_NLP_model: Creating bag of words...')
+            # for Bag of Words, the data should be a list of string
+            review_list = [' '.join(rev) for rev in review_list]
             self.vectorizer = CountVectorizer(analyzer='word',
                                               tokenizer=None,
                                               preprocessor=None,
                                               stop_words=None,
                                               max_features=self.maxfeature)
             self.train_data_features = self.vectorizer.fit_transform(
-                meaningful_words)
+                review_list)
             self.train_data_features = self.train_data_features.toarray()
 
-            # vocab = vectorizer.get_feature_names()
-            # dist = np.sum(train_data_features, axis=0)
+            # vocab = self.vectorizer.get_feature_names()
+            # dist = np.sum(self.train_data_features, axis=0)
             # for tag, count in zip(vocab, dist):
             #     print(count, tag)
 
@@ -150,8 +153,30 @@ class sentiment_analysis:
             else:
                 RF_n_est = kwargs['n_estimators']
             self.random_forest_model = RandomForestClassifier(
-                n_estimators=RF_n_est)
+                n_estimators=RF_n_est, n_jobs=self.pool_size)
             self.random_forest_model = self.random_forest_model.fit(
+                self.train_data_features, self.sentiment)
+        elif self.ML_method == 'LogisticRegression':
+            print('Training the data with Logistic Regression classifier...')
+            self.logistic_regression_model = LogisticRegression(
+                n_jobs=self.pool_size)
+            self.logistic_regression_model = self.logistic_regression_model.fit(
+                self.train_data_features, self.sentiment)
+        elif self.ML_method == 'MultinomialNB':
+            print('Training the data with Multinomial Naive Bayes classifier...')
+            self.multinomial_nb_model = MultinomialNB()
+            self.multinomial_nb_model = self.multinomial_nb_model.fit(
+                self.train_data_features, self.sentiment)
+        elif self.ML_method == 'SGDClassifier':
+            print('Training the data with stochastic gradient descent '
+                  'classifier...')
+            self.SGD_model = MultinomialNB(n_jobs=self.pool_size)
+            self.SGD_model = self.SGD_model.fit(
+                self.train_data_features, self.sentiment)
+        elif self.ML_method == 'SVM':
+            print('Training the data with Support Vector Machine classifier...')
+            self.SVM_model = svm.SVC()
+            self.SVM_model = self.SVM_model.fit(
                 self.train_data_features, self.sentiment)
 
     def predict_ML_model(self, df_test=None, test_file_name=None,
@@ -178,8 +203,6 @@ class sentiment_analysis:
                 sys.exit('predict_ML_model: The name {0} cannot be found'.
                          format(self.review_col_name))
             review_list = df_test[self.review_col_name].values.tolist()
-            meaningful_words = map(self.review_to_meaningful_words,
-                                   review_list)
         elif test_file_name is not None:
             suffix = os.path.splitext(test_file_name)[1][1:]
             if suffix == 'csv':
@@ -189,52 +212,40 @@ class sentiment_analysis:
                              ' be found'.format(self.review_col_name))
                 nitems = df_test.shape[0]
                 review_list = df_test[self.review_col_name].values.tolist()
-                meaningful_words = map(self.review_to_meaningful_words,
-                                       review_list)
             elif suffix == 'json':
-                data_dict_list = rp.load_data(test_file_name)
+                data_dict_list = rp.load_json_data(test_file_name)
                 nitems = len(data_dict_list)
                 if self.review_col_name not in data_dict_list[0].keys():
                     sys.exit('predict_ML_model: The name {0} cannot be '
                              'found'.format(self.review_col_name))
-                review_list = map(lambda x: x[self.review_col_name],
-                                  data_dict_list)
-                meaningful_words = map(self.review_to_meaningful_words,
-                                       review_list)
+                review_list = [dic[self.review_col_name] for dic in
+                               data_dict_list]
         elif dict_list is not None:
             nitems = len(dict_list)
             if self.review_col_name not in dict_list[0].keys():
                 sys.exit('predict_ML_model: The name {0} cannot be '
                          'found'.format(self.review_col_name))
-            review_list = map(lambda x: x[self.review_col_name],
-                              dict_list)
-            meaningful_words = map(self.review_to_meaningful_words,
-                                   review_list)
+            review_list = [dic[self.review_col_name] for dic in
+                               dict_list]
 
         print('The size of test data is {0}'.format(nitems))
 
-        test_data_features = self.vectorizer.transform(meaningful_words)
+        # for Bag of Words, the data should be a list of string
+        if self.NLP_model == 'BagOfWords':
+            review_list = [' '.join(rev) for rev in review_list]
+
+        test_data_features = self.vectorizer.transform(review_list)
         test_data_features = test_data_features.toarray()
 
-        sentiment_pred = self.random_forest_model.predict(test_data_features)
+        if self.ML_method == 'RandomForest':
+            sentiment_pred = self.random_forest_model.predict(test_data_features)
+        elif self.ML_method == 'LogisticRegression':
+            sentiment_pred = self.logistic_regression_model.predict(test_data_features)
+        elif self.ML_method == 'MultinomialNB':
+            sentiment_pred = self.multinomial_nb_model.predict(test_data_features)
+        elif self.ML_method == 'SGDClassifier':
+            sentiment_pred = self.SGD_model.predict(test_data_features)
+        elif self.ML_method == 'SVM':
+            sentiment_pred = self.SVM_model.predict(test_data_features)
+
         return sentiment_pred
-
-    @staticmethod
-    def review_to_meaningful_words(review):
-        """Convert review (string) to meaningful words
-
-        :param review: the review string
-        :returns: meaningful_words
-        :rtype: string, the meaninful_words are separated by ' '
-
-        """
-
-        from nltk.corpus import stopwords
-
-        words = review.split()
-        # convert stopwords to a set
-        sw_set = set(stopwords.words('english'))
-        meaningful_words = [word for word in words if word not in sw_set]
-        meaningful_words = ' '.join(meaningful_words)
-
-        return meaningful_words
