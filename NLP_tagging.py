@@ -1,6 +1,6 @@
 """ This class deals with tagging (POS, NER) related functions
 
-Time-stamp: <2016-07-19 19:24:28 yaning>
+Time-stamp: <2016-07-19 20:25:04 yaning>
 
 Author: Yaning Liu
 Main used modules nltk
@@ -71,7 +71,7 @@ class tagging:
                 tagpairs = self.post.tag(dic[review_col_name])
                 for tagpair in tagpairs:
                     if tagpair[1] == POS:
-                        wordlist.append(tagpair[0])
+                        word_and_freq.append(tagpair[0])
 
         word_and_freq = dict(Counter(word_and_freq))
 
