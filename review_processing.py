@@ -1,6 +1,6 @@
 """ This class deals with processing raw reviews/meta data
 
-Time-stamp: <2016-07-17 11:04:19 yaningliu>
+Time-stamp: <2016-07-18 23:59:11 yaning>
 
 Author: Yaning Liu
 Main used modules arebeautifulsoup, pandas
@@ -15,6 +15,7 @@ import csv
 from multiprocessing import Pool
 from itertools import repeat
 
+from nltk.corpus import stopwords
 
 class review_processing:
 
@@ -204,40 +205,6 @@ class review_processing:
         return clean_reviews
 
     @staticmethod
-    def review_str_to_sentences(review, clean_method,
-                                remove_numbers=True, remove_punct=True,
-                                remove_stopwords=True):
-        """Transform one single review item (string) and return it as a list of
-        sentences, each sentence is a list of words.
-
-        :param review: the unprocessed raw review string
-        :param clean_method: the method to clean review, e.g., BeautifulSoup
-        :param remove_numbers: boolean if remove numbers
-        :param remove_punct: boolean, if remove punctuations
-        :param remove_stopwords: boolean, if remove stopwords
-        :returns: cleaned sentences
-        :rtype: a list of list of words (string)
-
-        """
-
-        from nltk.corpus import stopwords
-        import nltk.data
-        tokenizer = nltk.data.load('tokenizers/punkt/english.pickle')
-
-        # Use the NLTK tokenizer to split the paragraph into sentences
-        raw_sentences = tokenizer.tokenize(review.strip())
-        sentences = []
-        for raw_sentence in raw_sentences:
-            if len(raw_sentence) > 0:
-                sentences.append(review_processing.
-                                 review_str_to_wordlist(raw_sentence,
-                                                        clean_method,
-                                                        remove_numbers,
-                                                        remove_punct,
-                                                        remove_stopwords))
-        return sentences
-
-    @staticmethod
     def review_str_to_wordlist(raw_review, clean_method,
                                remove_numbers=True, remove_punct=True,
                                remove_stopwords=True):
@@ -253,9 +220,6 @@ class review_processing:
         :rtype: string
 
         """
-
-        from nltk.corpus import stopwords
-
         if clean_method == 'BeautifulSoup':
             word_list = BeautifulSoup(raw_review, 'lxml').get_text()
         else:
