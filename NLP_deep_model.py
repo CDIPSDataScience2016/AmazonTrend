@@ -1,6 +1,6 @@
 """This is a class for training a Word2Vec model based on our data
 
-Time-stamp: <2016-07-19 16:46:55 yaning>
+Time-stamp: <2016-07-20 00:07:09 yaning>
 Main used modules are nltk, gensim, beautifulsoup
 """
 
@@ -104,21 +104,22 @@ class my_word2vec:
 
         """
 
-        pool = Pool(self.pool_size)
-        sentences_tmp = pool.starmap(
-            self.review_to_sentences_static,
-            zip(review_list, repeat(self.tokenizer),
-                repeat(self.clean_method), repeat(self.remove_numbers),
-                repeat(self.remove_punct), repeat(self.remove_stopwords)))
-        pool.close()
+        if self.use_pool:
+            pool = Pool(self.pool_size)
+            sentences_tmp = pool.starmap(
+                self.review_to_sentences_static,
+                zip(review_list, repeat(self.tokenizer),
+                    repeat(self.clean_method), repeat(self.remove_numbers),
+                    repeat(self.remove_punct), repeat(self.remove_stopwords)))
+            pool.close()
 
-        sentences = []
-        for sentence in sentences_tmp:
-            sentences.extend(sentence)
-
-        # sentences = []
-        # for review in review_list:
-        #     sentences += self.review_to_sentences(review)
+            sentences = []
+            for sentence in sentences_tmp:
+                sentences.extend(sentence)
+        else:
+            sentences = []
+            for review in review_list:
+                sentences += self.review_to_sentences(review)
 
         return sentences
 
