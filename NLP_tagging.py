@@ -1,6 +1,6 @@
 """ This class deals with tagging (POS, NER) related functions
 
-Time-stamp: <2016-07-20 15:11:06 yaning>
+Time-stamp: <2016-07-21 18:02:14 yaning>
 
 Author: Yaning Liu
 Main used modules nltk
@@ -12,6 +12,9 @@ from nltk.tag import StanfordNERTagger
 from nltk.tag import StanfordPOSTagger
 import sys
 from collections import Counter
+
+# NER 3 classes
+NER_CLASS = ['PERSON', 'ORGANIZATION', 'LOCATION']
 
 # map for POS
 map_POS = {'adj': ['JJ', 'JJR', 'JJS'],
@@ -39,6 +42,10 @@ class tagging:
         if use_stanford:
             self.post = StanfordPOSTagger(self.POS_model, self.POS_tagger)
             self.nert = StanfordNERTagger(self.NER_model, self.NER_tagger)
+        else:
+            self.post = nltk.pos_tag
+            self.nert = StanfordNERTagger(self.NER_model,
+                                          self.NER_tagger) # or nltk.ne_chunk
 
     def show_the_most_frequent_postags(self, dic_list, review_col_name, POS,
                                        product_id=None, id_type=None, topn=5):
@@ -110,3 +117,65 @@ class tagging:
             word_and_freq.append([key, word_and_freq_dic[key]])
 
         return word_and_freq
+
+    def show_nertags(self, dic_list, review_col_name, NER,
+                     product_id, id_type):
+        """Given a list of reviews, each review is a list of words,
+        and the name class, 'PERSON', 'ORGANIZATION' or 'LOCATION'
+        show all named entity of the name classes associated with the product
+        corresponding number of times appeared
+
+        :param dic_list: a list of dictionaries, the review of each
+        dictionary is a list of words
+        :param product_id: string, the product id
+        :param id_type: string, the type of the id, e.g. asin
+        :param NER: the NER class, 'PERSON', 'ORGANIZATION' or 'LOCATION'
+        :param review_col_name, string the key of the review text value
+        :returns: a dic, with the NER classes as the keys, and the values
+        are a list of pairs in the form of [word, frequency].
+        The values are ordered by frequency in the descending order
+        :rtype: a dictionary with values as a list of [word, frequency]
+
+        """
+
+        if review_col_name not in dic_list[0].keys():
+            sys.exit('show_nertags: The specified key {0} '
+                     'can not be found in the dictionaries'
+                     .format(review_col_name))
+
+        if product_id is None or id_type is None:
+            sys.exit('show_nertags: both product_id and id_type'
+                    ' should be provided!')
+
+        for ner in NER:
+            if ner not in NER_CLASS:
+                sys.exit('show_nertags: The NER {} '
+                         'is not known'.format(ner))
+
+        pair_list = []
+        if product_id is not None and id_type is not None:
+            for dic in dic_list:
+                if dic[id_type] == product_id:
+                    tagpairs = self.nert.tag(dic[review_col_name])
+                    for tagpair in tagpairs:
+                        if tagpair[1] in NER_CLASS:
+                            pair_list.append(tagpair)
+
+        dic_NER = {}
+        for ner in NER_CLASS:
+            dic_NER[ner] = []
+        for pair in pair_list:
+            dic_NER[pair[1]].append(pair[0])
+
+        for key in dic_NER.keys():
+            dic_NER[key] = dict(Counter(dic_NER[key]))
+            # sort the inner dictionary in terms of the values in
+            # descending order and return the keys
+            keys_ordered = sorted(dic_NER[key], key=dic_NER[key].get,
+                                  reverse=True)
+            tmp_list = []
+            for key1 in keys_ordered:
+                tmp_list.append([key, dic_NER[key][key1]])
+                dic_NER[key] = tmp_list
+
+        return dic_NER

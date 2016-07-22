@@ -1,12 +1,15 @@
 """ This class deals with topic modeling.
 
-Time-stamp: <2016-07-21 11:06:11 yaning>
+Time-stamp: <2016-07-21 22:41:33 yaning>
 
 Author: Yaning Liu
 
  The methods considered are:
 1) Latent Dirichlet Allocation
 2) Latent Semantic Analysis
+3) Term frequency inverse document frequency
+4) Random Projection
+5) Hierarchical Dirichlet Process
 
 Main used modules are gensim
 """
@@ -17,6 +20,7 @@ import gensim
 from gensim import corpora, models, similarities
 import logging
 import sys
+from multiprocessing import Pool
 
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s',
                     level=logging.INFO)
@@ -69,11 +73,12 @@ class topic_modeling(object):
         :param product_id: string, the product id
         :param id_type: string, the type of the id, e.g. asin
         :param review_col_name, string the key of the review text value
-        :returns:
-        :rtype:
+        :returns: one of the topic models (lsi, lda, ...), dictionary
+        and corpus
+        :rtype: gensim topic model, dictionary and corpus
 
         """
-        if review_col_name not in dic_list[0].keys():
+        if review_col_name not in dict_list[0].keys():
             sys.exit('get_topics: The specified key {0} '
                      'can not be found in the dictionaries'
                      .format(review_col_name))
@@ -83,7 +88,7 @@ class topic_modeling(object):
             sys.exit('get_topics: both/neither product_id and id_type'
                     ' should be provided!' .format(id_type))
 
-        if id_type is not None and id_type not in dic_list[0].keys():
+        if id_type is not None and id_type not in dict_list[0].keys():
             sys.exit('get_topics: The specified id type {0} '
                      'can not be found in the dictionaries'
                      .format(id_type))
@@ -91,16 +96,17 @@ class topic_modeling(object):
         # The review list of the product
         prod_text_list = [dic[review_col_name] for dic in dict_list
                           if dic[id_type]==product_id]
-        dictionary = self.build_dictionary(dict_list, self.save_dict,
-                                          self.save_dict_name)
+        dictionary = self.build_dictionary(prod_text_list, self.save_dict,
+                                           self.save_dict_name)
 
         corpus = self.get_corpus(dictionary, prod_text_list, self.save_corpus,
                                  self.save_corpus_name, self.use_pool,
                                  self.pool_size)
-        topic_model = self.get_topic_model(self.TM_method, dictionary,
-                                           self.ntopic,
+        topic_model = self.get_topic_model(corpus, self.TM_method,
+                                           dictionary, ntopic,
                                            self.save_topic_model,
-                                           self.save_topic_name)
+                                           self.save_topic_model_name)
+        return topic_model, dictionary, corpus
 
 
     @staticmethod
@@ -123,6 +129,7 @@ class topic_modeling(object):
                          'provided!')
             else:
                 dictionary.save(save_name)
+
         return dictionary
 
     @staticmethod
@@ -148,14 +155,17 @@ class topic_modeling(object):
         else:
             corpus = [dictionary.doc2bow(text) for text in text_list]
 
-        if self.save_corpus:
+        if save_corpus:
             # save corpus for later use
             corpora.MmCorpus.serialize(save_corpus_name, corpus)
 
+        return corpus
 
+
+    @staticmethod
     def get_topic_model(corpus, trans_method, dictionary, ntopics,
-                                 save_trans_model=False,
-                                 save_trans_name=None):
+                        save_trans_model=False,
+                        save_trans_name=None):
         """Obtain a topic model based on one of the transformation method
 
         :param corpus: the corpus, a list of bag of words
@@ -224,3 +234,69 @@ class topic_modeling(object):
         else:
             sys.exit('corpus_transform: topic method {0} is not valid!'
                      .format(transform_method))
+
+    @staticmethod
+    def find_similarity(dictionary, corpus, ntopics, doc_to_compare,
+                        dictionary_name=None, corpus_name=None,
+                        load_index=False, load_index_name=None,
+                        save_index=False, save_index_name=None):
+        """find the similarity indices for a new document/new documents doc_to_compare
+
+        :param dictionary: the gensim dictionary
+        :param corpus: the gensim corpus
+        :param ntopics: the number of topics
+        :param doc_to_compare: a list of list of words,
+        the new document(s) to be compared
+        :param dictionary_name: the file name of dictionary
+        :param corpus_name: the corpus file name
+        :param load_index: boolean, if load index from a file
+        :param load_index_name: string, the name of the index file to load from
+        :param save_index: boolean, if saving index
+        :param save_index_name: string, the file name of index to save to
+        :returns: similarity
+        :rtype: gensim similarity index, a list of a list of pairs of the form
+        (old doc number, similarity)
+
+        """
+        if dictionary is None:
+            if dictionary_name is None:
+                sys.exit('find_similarity: '
+                         'dictionary file name has to be provided!')
+            else:
+                dictionary = corpora.Dictionary.load(dictionary_name)
+
+        if corpus is None:
+            if corpus_name is None:
+                sys.exit('find_similarity: '
+                         'corpus file name has to be provided!')
+            else:
+                corpus = corpora.MmCorpus(corpus_name)
+
+        lsi = models.LsiModel(corpus, id2word=dictionary, num_topics=ntopics)
+
+        if not load_index:
+            # transform corpus to LSI space and index it
+            index = similarities.MatrixSimilarity(lsi[corpus])
+        else:
+            if load_index_name is None:
+                sys.exit('find_similarity: index file name not provided!')
+            else:
+                index = similarities.MatrixSimilarity.load(load_index_name)
+
+        if save_index:
+            if save_indx_name is None:
+                index.save(save_index_name)
+            else:
+                sys.exit('find_similarity: index file name not provided!')
+
+        sim_list = []
+        for doc in doc_to_compare:
+            print(doc)
+            vec_bow = dictionary.doc2bow(doc)
+            vec_lsi = lsi[vec_bow]
+            print(vec_lsi)
+            sim = index[vec_lsi]
+            sim = sorted(enumerate(sim), key=lambda item: -item[-1])
+            sim_list.append(sim)
+
+        return sim_list

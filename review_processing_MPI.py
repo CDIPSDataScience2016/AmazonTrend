@@ -1,7 +1,7 @@
 
 """ processes raw reviews/meta data with MPI
 
-Time-stamp: <2016-07-21 11:10:37 yaning>
+Time-stamp: <2016-07-21 18:04:42 yaning>
 
 Author: Yaning Liu
 
@@ -22,7 +22,7 @@ machine = 'Edison'   # can be LRC or MAC or Cori or Edison
 # -----------------------fixed parameters------------------------------
 if machine == 'MAC':
     prefix = '/Users/yaningliu/GoogleDrive/DataScience/CDIPS2016/'
-    prefix = '/Users/yaningliu/nltk_data/'
+    prefix_nltk = '/Users/yaningliu/nltk_data/'
 
     review_elec_fn = prefix + 'reviews_Electronics.json'
     meta_elec_fn = prefix + 'meta_Electronics.json'
