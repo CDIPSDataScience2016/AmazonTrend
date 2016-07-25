@@ -1,6 +1,6 @@
 """ This class deals with processing raw reviews/meta data
 
-Time-stamp: <2016-07-18 23:59:11 yaning>
+Time-stamp: <2016-07-22 00:38:32 yaning>
 
 Author: Yaning Liu
 Main used modules arebeautifulsoup, pandas
@@ -125,12 +125,15 @@ class review_processing:
         return dict_list
 
     @staticmethod
-    def load_json_data(data_file_name_in, nentries=-1):
+    def load_json_data(data_file_name_in, nentries=-1,
+                       use_pool=False, pool_size=1):
         """Load the review data to a list of strings by readlines and
 
         :param data_file_name_in: the raw data file name string
         :param nentries: specify the number of entries to load, if negative,
         load all entries
+        :param use_pool: boolean, if using pool
+        :param pool_size: integer, the pool size
         :returns: data_lines, the processed reviews
         :rtype: list of dictionaries
 
@@ -142,8 +145,13 @@ class review_processing:
                 data_lines = fin.readlines()
                 len_data = len(data_lines)
 
-                for i in range(len_data):
-                    data_lines[i] = json.loads(data_lines[i])
+                if use_pool:
+                    pool = Pool(pool_size)
+                    data_lines = pool.map(json.loads, data_lines)
+                    pool.close()
+                else:
+                    for i in range(len_data):
+                        data_lines[i] = json.loads(data_lines[i])
         else:
             data_lines = []
             with open(data_file_name_in, 'r') as fin:

@@ -1,6 +1,6 @@
-"""This is a class for training a Word2Vec model based on our data
+"""This is a class for training a Word2Vec/Doce2Vec model based on our data
 
-Time-stamp: <2016-07-20 00:07:09 yaning>
+Time-stamp: <2016-07-21 23:57:24 yaning>
 Main used modules are nltk, gensim, beautifulsoup
 """
 
@@ -22,6 +22,9 @@ logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s',
                     level=logging.INFO)
 
 class my_word2vec:
+    """
+    Word2Vec class
+    """
 
     def __init__(self, review_col_name,
                  tokenizer, use_pool=False, pool_size=None,
