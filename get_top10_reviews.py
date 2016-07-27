@@ -1,6 +1,6 @@
 """This code get the top 10 reviews of a certain product category, and write it as a csv file
 
-Time-stamp: <2016-07-27 12:26:23 yaningliu>
+Time-stamp: <2016-07-27 14:14:40 yaningliu>
 Author: Yaning Liu
 """
 
@@ -25,7 +25,6 @@ def get_sorted_product(json_file_name, col_name, write_to_csv=False,
     the number of reviews
 
     """
-
     name_collection = []
     count = 0
     with open(json_file_name, 'r') as fh:
@@ -61,7 +60,6 @@ def get_sorted_product(json_file_name, col_name, write_to_csv=False,
                         keys = list(dic.keys())
                     count += 1
 
-            print(keys)
             with open(write_fn, 'w') as fh:
                 dict_writer = csv.DictWriter(fh, keys)
                 dict_writer.writeheader()
@@ -76,4 +74,3 @@ if __name__ == '__main__':
     tuple_list = get_sorted_product('/Users/yaningliu/GoogleDrive/DataScience/'
                              'CDIPS2016/reviews_Electronics.json', 'asin',
                              True, 'top10_reviews_elec.csv', 10)
-    print(tuple_list[:10])
