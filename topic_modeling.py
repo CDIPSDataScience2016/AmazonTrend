@@ -1,6 +1,6 @@
 """ This class deals with topic modeling.
 
-Time-stamp: <2016-07-25 09:50:22 yaningliu>
+Time-stamp: <2016-07-27 14:08:57 yaningliu>
 
 Author: Yaning Liu
 
@@ -16,6 +16,8 @@ Main used modules are gensim
 
 import numpy as np
 import nltk
+from nltk.tag import StanfordNERTagger
+from nltk.tag import StanfordPOSTagger
 import gensim
 from gensim import corpora, models, similarities
 import logging
@@ -70,7 +72,8 @@ class topic_modeling(object):
 
 
     def get_topics(self, dict_list, product_id, id_type, review_col_name,
-                   ntopic=10):
+                   ntopic=10, clean_reviews=False, POS_tagging=False,
+                   tagging_obj=None, noun_phrases=None):
         """Get the topics given a list of dictionaries, each list element
         is a cleaned text (a list of words), given the product id and id type
         show the top ntopic topics
@@ -112,6 +115,31 @@ class topic_modeling(object):
             prod_text_list = [dic[review_col_name] for dic in dict_list
                               if dic[id_type] == product_id and
                               dic[pn_criteria] < 3.0]
+
+        if clean_reviews:
+            prod_text_list = [rp.review_processing.
+                              review_str_to_wordlist(text, 'BeautifulSoup')
+                              for text in prod_text_list]
+        if POS_tagging and not noun_phrases:
+            prod_text_list = tagging_obj.get_pos_tagged_words(
+                prod_text_list, POS=['adj', 'adv', 'noun'])
+        elif not POS_tagging and noun_phrases:
+            nouns_list = tagging_obj.get_pos_tagged_words(
+                prod_text_list, POS=['noun'])
+            from textblob import TextBlob
+            prod_text_list = [TextBlob(' '.join(text)).noun_phrases
+                              for text in prod_text_list]
+            for i in range(len(prod_text_list)):
+                prod_text_list[i] += nouns_list[i]
+
+            # prod_text_list_tmp = [TextBlob(' '.join(text)).noun_phrases
+            #                       for text in prod_text_list]
+            # prod_text_list = []
+            # for review in prod_text_list_tmp:
+            #     tmp = []
+            #     for nf in review:
+            #         tmp += nf.split()
+            #     prod_text_list.append(tmp)
 
         dictionary = self.build_dictionary(prod_text_list, self.save_dict,
                                            self.save_dict_name)
@@ -321,6 +349,8 @@ class topic_modeling(object):
     def get_product_topic_dataframe(dict_list, product_id, id_type,
                                     review_col_name, model_type='LDA',
                                     clean_reviews=False, clean_method='regular',
+                                    pos_tagging=False, tagging_obj=None,
+                                    noun_phrases=None,
                                     load_dictionary=True, dict_file_name=None,
                                     load_corpus=True, corpus_file_name=None,
                                     load_model=True, model_name=None):
@@ -334,6 +364,10 @@ class topic_modeling(object):
         :param clean_reviews: boolean, if cleaning reviews
         :param clean_method: the method to clean the reviews.
         'regular', 'POStag', 'ngrams'
+        :param pos_tagging: boolean, if pos_tagging. If, tagging, keep only
+        adjective, adverbs and nouns
+        :param ngram_tagging: if None: not using ngram_tagging. If = 2 use
+        2 gram tagging. if = 3, use 3 gram tagging
         :param load_dictionary: bool, if loading dictioanry
         :param dict_file_name: the file name of the dictionary if loading
         :param load_corpus: bool, if loading corpus
@@ -361,6 +395,27 @@ class topic_modeling(object):
             review_list = [rp.review_processing.
                            review_str_to_wordlist(dic[review_col_name])
                            for dic in dict_list if dic[id_type] == product_id]
+
+        if pos_tagging and noun_phrases is None:
+            review_list = tagging_obj.get_pos_tagged_words(
+                review_list, POS=['adj', 'adv', 'noun'])
+        elif noun_phrases and not pos_tagging:
+            from textblob import TextBlob
+            nouns_list = tagging_obj.get_pos_tagged_words(
+                review_list, POS=['noun'])
+            review_list = [TextBlob(' '.join(review)).noun_phrases
+                           for review in review_list]
+            for i in range(len(review_list)):
+                review_list[i] += nouns_list[i]
+
+            # review_list_tmp = [TextBlob(' '.join(review)).noun_phrases
+            #                    for review in review_list]
+            # review_list = []
+            # for review in review_list_tmp:
+            #     tmp = []
+            #     for nf in review:
+            #         tmp += nf.split()
+            #     review_list.append(tmp)
 
         nreviews = len(review_list)
 
