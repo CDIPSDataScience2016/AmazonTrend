@@ -1,6 +1,6 @@
 """ This class deals with topic modeling.
 
-Time-stamp: <2016-07-27 14:08:57 yaningliu>
+Time-stamp: <2016-07-27 14:30:29 yaningliu>
 
 Author: Yaning Liu
 
@@ -15,10 +15,6 @@ Main used modules are gensim
 """
 
 import numpy as np
-import nltk
-from nltk.tag import StanfordNERTagger
-from nltk.tag import StanfordPOSTagger
-import gensim
 from gensim import corpora, models, similarities
 import logging
 import sys
@@ -28,6 +24,7 @@ import review_processing as rp
 
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s',
                     level=logging.INFO)
+
 
 class topic_modeling(object):
 
@@ -70,7 +67,6 @@ class topic_modeling(object):
         self.save_topic_model = save_topic_model
         self.save_topic_model_name = save_topic_model_name
 
-
     def get_topics(self, dict_list, product_id, id_type, review_col_name,
                    ntopic=10, clean_reviews=False, POS_tagging=False,
                    tagging_obj=None, noun_phrases=None):
@@ -93,10 +89,10 @@ class topic_modeling(object):
                      'can not be found in the dictionaries'
                      .format(review_col_name))
 
-        if ( (product_id is not None and id_type is None) or
-             (product_id) is None and id_type is not None):
+        if product_id is not None and id_type is None or \
+           product_id is None and id_type is not None:
             sys.exit('get_topics: both/neither product_id and id_type'
-                    ' should be provided!' .format(id_type))
+                     ' should be provided!' .format(id_type))
 
         if id_type is not None and id_type not in dict_list[0].keys():
             sys.exit('get_topics: The specified id type {0} '
@@ -153,7 +149,6 @@ class topic_modeling(object):
                                            self.save_topic_model_name)
         return topic_model, dictionary, corpus
 
-
     @staticmethod
     def build_dictionary(cleaned_text_list, save_dict=False, save_name=None):
         """build dictionary from cleaned texts
@@ -170,8 +165,8 @@ class topic_modeling(object):
         dictionary = corpora.Dictionary(cleaned_text_list)
         if save_dict:
             if save_name is None:
-                sys.exit('build_dictionary: the file name to save to should be '
-                         'provided!')
+                sys.exit('build_dictionary: the file name to save '
+                         'to should be provided!')
             else:
                 dictionary.save(save_name)
 
@@ -205,7 +200,6 @@ class topic_modeling(object):
             corpora.MmCorpus.serialize(save_corpus_name, corpus)
 
         return corpus
-
 
     @staticmethod
     def get_topic_model(corpus, trans_method, dictionary, ntopics,
@@ -278,7 +272,7 @@ class topic_modeling(object):
             return rp
         else:
             sys.exit('corpus_transform: topic method {0} is not valid!'
-                     .format(transform_method))
+                     .format(trans_method))
 
     @staticmethod
     def find_similarity(dictionary, corpus, ntopics, doc_to_compare,
@@ -348,7 +342,8 @@ class topic_modeling(object):
     @staticmethod
     def get_product_topic_dataframe(dict_list, product_id, id_type,
                                     review_col_name, model_type='LDA',
-                                    clean_reviews=False, clean_method='regular',
+                                    clean_reviews=False,
+                                    clean_method='regular',
                                     pos_tagging=False, tagging_obj=None,
                                     noun_phrases=None,
                                     load_dictionary=True, dict_file_name=None,
@@ -442,9 +437,9 @@ class topic_modeling(object):
                 TopicID.append(topic_id[0])
                 TopicProb.append(topic_id[1])
                 word_and_probs = topic_model.show_topic(topic_id[0])
-                WordsWeights.append('+'.join(['{0:4.2} {1}'.format(wp[1], wp[0])
+                WordsWeights.append('+'.join(['{0:4.2} {1}'
+                                              .format(wp[1], wp[0])
                                               for wp in word_and_probs]))
-
 
             # sort first
             sort_idx = np.argsort(TopicProb)[::-1]
