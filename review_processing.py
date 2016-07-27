@@ -1,6 +1,6 @@
 """ This class deals with processing raw reviews/meta data
 
-Time-stamp: <2016-07-22 00:38:32 yaning>
+Time-stamp: <2016-07-27 14:04:13 yaningliu>
 
 Author: Yaning Liu
 Main used modules arebeautifulsoup, pandas
@@ -14,8 +14,10 @@ import re
 import csv
 from multiprocessing import Pool
 from itertools import repeat
+import pandas as pd
 
 from nltk.corpus import stopwords
+
 
 class review_processing:
 
@@ -125,9 +127,35 @@ class review_processing:
         return dict_list
 
     @staticmethod
+    def load_csv_data(data_file_name_in, nentries=-1, separator=' '):
+        """Load the review data to a list of strings by readlines and
+        put them in a list of dictionaries
+
+        :param data_file_name_in: the raw data file name string
+        :param nentries: specify the number of entries to load, if negative,
+        load all entries
+        :returns: data_lines, the processed reviews
+        :rtype: list of dictionaries
+
+        """
+        print('Loading data from csv/csv.gz to a list of dictionaries')
+
+        if nentries < 0:
+            df = pd.read_csv(data_file_name_in, sep=separator)
+        else:
+            df = pd.read_csv(data_file_name_in, sep=separator,
+                             nrows=nentries)
+
+        dict_list = df.to_dict(orient='records')
+
+        print('Loading data finished')
+        return dict_list
+
+    @staticmethod
     def load_json_data(data_file_name_in, nentries=-1,
                        use_pool=False, pool_size=1):
         """Load the review data to a list of strings by readlines and
+        put them in a list of dictionaries
 
         :param data_file_name_in: the raw data file name string
         :param nentries: specify the number of entries to load, if negative,
@@ -138,7 +166,7 @@ class review_processing:
         :rtype: list of dictionaries
 
         """
-        print('Loading data to a list of dictionaries')
+        print('Loading data from json to a list of dictionaries')
 
         if nentries < 0:
             with open(data_file_name_in, 'r') as fin:
