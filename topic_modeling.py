@@ -1,6 +1,6 @@
 """ This class deals with topic modeling.
 
-Time-stamp: <2016-07-28 08:54:01 yaningliu>
+Time-stamp: <2016-07-28 16:04:32 yaningliu>
 
 Author: Yaning Liu
 
@@ -25,6 +25,16 @@ import review_processing as rp
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s',
                     level=logging.INFO)
 
+asin_dic = {'B0074BW614': 'Kindle Fire HD 7',
+            'B00DR0PDNE': 'Google Chromecast HDMI Streaming Media Player',
+            'B007WTAJTO': 'SanDisk Ultra 64GB MicroSDXC',
+            'B0019EHU8G': 'Mediabridge ULTRA Series HDMI Cable (6 Feet)',
+            'B006GWO5WK': 'Amazon Kindle PowerFast adapter',
+            'B003ELYQGG': 'Panasonic RPHJE120D In-Ear Headphone',
+            'B003ES5ZUU': 'AmazonBasics High-Speed HDMI Cable-15 Feet',
+            'B007R5YDYA': 'Kindle protective cover',
+            'B00622AG6S': 'PowerGen Dual USB Car charger for mobile Devices',
+            'B0002L5R78': 'DVI Gear HDMI Cable 2M 6 feet'}
 
 class topic_modeling(object):
 
@@ -332,10 +342,6 @@ class topic_modeling(object):
     @staticmethod
     def get_product_topic_dataframe(dict_list, product_id, id_type,
                                     review_col_name, model_type='LDA',
-                                    clean_reviews=False,
-                                    clean_method='BeautifulSoup',
-                                    POS_tagging=False, tagging_obj=None,
-                                    noun_phrases=False,
                                     load_dictionary=True, dict_file_name=None,
                                     load_corpus=True, corpus_file_name=None,
                                     load_model=True, model_name=None):
@@ -367,70 +373,30 @@ class topic_modeling(object):
         if load_dictionary:
             dictionary = corpora.dictionary.Dictionary.load(dict_file_name)
             print('dictionry loaded', flush=True)
-        # if load_corpus:
-        #     corpus = corpora.MmCorpus.load(corpus_file_name)
+        if load_corpus:
+            corpus = corpora.MmCorpus(corpus_file_name)
         if load_model and model_type == 'LDA':
             topic_model = models.LdaModel.load(model_name)
-            print('topil model loaded', flush=True)
+            print('topic model loaded', flush=True)
 
-        if not clean_reviews:
-            review_list = [dic[review_col_name] for dic in dict_list
-                           if dic[id_type] == product_id]
-        elif clean_reviews:
-            print('Cleaning reviews...', flush=True)
-            raw_reviews = [dic[review_col_name] for dic in dict_list
-                           if dic[id_type] == product_id]
-            review_list = [rp.review_processing.
-                           review_str_to_wordlist(dic[review_col_name], clean_method)
-                           for dic in dict_list if dic[id_type] == product_id]
-            print('Review cleaned', flush=True)
+        product_idx = [dict_list.index(dic) for dic in dict_list
+                       if dic[id_type] == product_id]
 
-        if POS_tagging and not noun_phrases:
-            review_list = tagging_obj.get_pos_tagged_words_for_product(
-                review_list, POS=['adj', 'adv', 'noun'])
-        elif noun_phrases and not POS_tagging:
-            from textblob import TextBlob
-            nouns_list = tagging_obj.get_pos_tagged_words_for_product(
-                review_list, POS=['noun'])
-            review_list = [TextBlob(' '.join(review)).noun_phrases
-                           for review in review_list]
-            for i in range(len(review_list)):
-                review_list[i] += nouns_list[i]
-
-            # review_list_tmp = [TextBlob(' '.join(review)).noun_phrases
-            #                    for review in review_list]
-            # review_list = []
-            # for review in review_list_tmp:
-            #     tmp = []
-            #     for nf in review:
-            #         tmp += nf.split()
-            #     review_list.append(tmp)
-
-        nreviews = len(review_list)
+        nreviews = len(product_idx)
         print('The number of reviews is: {}'.format(nreviews))
-        dict_df = {'Review': [], 'Review #': [], 'TopicID': [],
-                   'Topic prob': [], 'Words and weights': []}
-        # dict_df = {'Review': [], 'TopicID': [],
-        #            'Topic prob': [], 'Words and weights': []}
+
         df = pd.DataFrame()
 
         for i in range(nreviews):
-            print('Dealing with topic # {}'.format(i), flush=True)
-            bow = dictionary.doc2bow(review_list[i])
-            topic_ids = topic_model.get_document_topics(bow)
-
+            if not i % 10:
+                print('Dealing with topic # {}'.format(i), flush=True)
+            topic_ids = topic_model.get_document_topics(corpus[product_idx[i]])
             TopicID = []
             TopicProb = []
             WordsWeights = []
             count = 0
             for topic_id in topic_ids:
-                if not clean_reviews:
-                    dict_df['Review'].append(' '.join(review_list[i]))
-                elif clean_reviews:
-                    dict_df['Review'].append(raw_reviews[i])
-                dict_df['Review #'].append(i)
                 count += 1
-                print('Dealing with topic id # {}'.format(count), flush=True)
 
                 TopicID.append(topic_id[0])
                 TopicProb.append(topic_id[1])
@@ -439,46 +405,129 @@ class topic_modeling(object):
                                               .format(wp[1], wp[0])
                                               for wp in word_and_probs]))
 
-            sort first
             sort_idx = np.argsort(TopicProb)[::-1]
             TopicID = list(np.array(TopicID)[sort_idx])
             TopicProb = list(np.array(TopicProb)[sort_idx])
             WordsWeights = list(np.array(WordsWeights)[sort_idx])
 
-            idx = np.where(np.array(TopicProb) > 0.8)
+            idx = np.where(np.array(TopicProb) > 0.5)
             if idx[0].shape[0]:
                 TopicID = list(np.array(TopicID)[idx[0]])
                 TopicProb = list(np.array(TopicProb)[idx[0]])
                 WordsWeights = list(np.array(WordsWeights)[idx[0]])
-            else:
-                idx = np.where(np.array(TopicProb) > 0.4)
-                TopicID = list(np.array(TopicID)[idx])
-                TopicProb = list(np.array(TopicProb)[idx])
-                WordsWeights = list(np.array(WordsWeights)[idx])
 
-            dict_df['TopicID'].append(TopicID)
-            dict_df['Topic prob'].append(TopicProb)
-            dict_df['Words and weights'].append('+'.join(['{0:4.2} {1}'.
-                                                          format(wp[1], wp[0])
-                                                          for wp in
-                                                          WordsWeights]))
-
-            if not clean_reviews:
-                # iterables = [' '.join(review_list[i]),
-                #              np.arange(len(topic_ids))]
                 iterables = [i, TopicID]
-            if clean_reviews:
-                # iterables = [review_list[i], np.arange(len(topic_ids))]
-                iterables = [i, TopicID]
-            index = pd.MultiIndex.from_product(iterables,
-                                               names=['Reviews', 'Topic ID'])
-            df_tmp = pd.DataFrame({'Topic prob':
-                                   TopicProb,
-                                   'Words and weights':
-                                   WordsWeights}, index=index)
+                index = pd.MultiIndex.from_product(iterables,
+                                                   names=['Review #', 'TID'])
+                df_tmp = pd.DataFrame({'TProb':
+                                       TopicProb,
+                                       'Words':
+                                       WordsWeights}, index=index)
 
+                df = pd.concat((df, df_tmp))
+
+        return df
+
+    @staticmethod
+    def get_reviews_from_topics_dataframe(dict_list, product_id, id_type,
+                                          review_col_name, model_type='LDA',
+                                          clean_reviews=False,
+                                          clean_method='BeautifulSoup',
+                                          load_dictionary=True,
+                                          dict_file_name=None,
+                                          load_corpus=True,
+                                          corpus_file_name=None,
+                                          load_model=True, model_name=None):
+        """Get the most probable reviews corresponding to all topics related
+        to a certain product and turn it into a data frame
+
+        :param dict_list: a list of dictionaries
+        :param product_id: string, product id
+        :param id_type: string, the type of id
+        :param review_col_name: the column name of the review
+        :param model_type: the type of topic modeling
+        :param clean_reviews: boolean, if cleaning reviews
+        :param clean_method: the method to clean the reviews.
+        'regular', 'POStag', 'ngrams'
+        :param POS_tagging: boolean, if POS_tagging. If, tagging, keep only
+        adjective, adverbs and nouns
+        :param ngram_tagging: if None: not using ngram_tagging. If = 2 use
+        2 gram tagging. if = 3, use 3 gram tagging
+        :param load_dictionary: bool, if loading dictioanry
+        :param dict_file_name: the file name of the dictionary if loading
+        :param load_corpus: bool, if loading corpus
+        :param corpus_file_name: the file name of the corpus if loading
+        :param load_model: bool, if loading the topic model
+        :param model_name: the file name of the topic model, if loading
+        :returns: df, the topics are sorted in descending order by topic
+        probability
+        :rtype: a data frame
+
+        """
+        if load_dictionary:
+            dictionary = corpora.dictionary.Dictionary.load(dict_file_name)
+            print('dictionry loaded', flush=True)
+        if load_corpus:
+            # corpus = corpora.MmCorpus.load(corpus_file_name)
+            corpus = corpora.MmCorpus(corpus_file_name)
+        if load_model and model_type == 'LDA':
+            topic_model = models.LdaModel.load(model_name)
+            print('topic model loaded', flush=True)
+
+        df = pd.DataFrame()
+
+        product_idx = [dict_list.index(dic) for dic in dict_list
+                       if dic[id_type] == product_id]
+
+        ndocs = len(product_idx)
+        ntopics = topic_model.num_topics
+        dic_stat = {}
+        for i in range(ntopics):
+            dic_stat[str(i)] = []
+
+        for i in range(ndocs):
+            if not i % 1000:
+                print('Review {}'.format(i), flush=True)
+            topic_ids = topic_model.get_document_topics(corpus[product_idx[i]])
+            for topic_id in topic_ids:
+                dic_stat[str(topic_id[0])].append([i, topic_id[1]])
+
+        # sorting for each topic
+        for i in range(ntopics):
+            if not i % 20:
+                print('Topic {}'.format(i), flush=True)
+            dic_stat[str(i)] = sorted(dic_stat[str(i)], key=lambda x: x[1],
+                                      reverse=True)
+
+            wp = topic_model.show_topic(i, 5)
+            df_tmp = pd.DataFrame({'TID': i,
+                                   'Word1': '{0}({1:4.2})'.format(wp[0][0], wp[0][1]),
+                                   'Word2': '{0}({1:4.2})'.format(wp[1][0], wp[1][1]),
+                                   'Word3': '{0}({1:4.2})'.format(wp[2][0], wp[2][1]),
+                                   'Word4': '{0}({1:4.2})'.format(wp[3][0], wp[3][1]),
+                                   'Word5': '{0}({1:4.2})'.format(wp[4][0], wp[4][1]),
+                                   # 'Word6': '{0}({1:4.2})'.format(wp[5][0], wp[5][1]),
+                                   'RID':
+                                   ['{:d}'.format(ls[0]) for ls in dic_stat[str(i)]],
+                                   # 'Related_product': [asin_dic[product_id] for ls in dic_stat[str(i)]],
+                                   'TProb': [ls[1] for ls in dic_stat[str(i)]]}).set_index(
+                                       ['TID', 'Word1', 'Word2', 'Word3', 'Word4',
+                                        'Word5', 'RID'
+                                        #'Related_product'
+                                       ])
+
+            # df_tmp.reset_index(inplace=True)
+            # rows = []
+            # _ = df_tmp.apply(lambda row:
+            #                  [rows.append([row['TopicID'], row['Word1'], row['Word2'],
+            #                                row['Word3'], row['Word4'], row['Word5'],
+            #                                nn1, nn2])
+            #                   for nn1, nn2, nn3 in zip(row.Review_ID,
+            #                                            # row.Related_product,
+            #                                            row.Topic_prob)], axis=1)
+            # df_tmp = pd.DataFrame(rows, columns=df_tmp.columns).set_index(
+            #     ['TopicID', 'Word1', 'Word2', 'Word3', 'Word4', 'Word5', 'Word6',
+            #      'Review_ID', 'Related_product'])
             df = pd.concat((df, df_tmp))
-
-        # df = pd.DataFrame.from_dict(dict_df)
 
         return df
