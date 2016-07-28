@@ -1,6 +1,6 @@
 """ This class deals with topic modeling.
 
-Time-stamp: <2016-07-27 14:30:29 yaningliu>
+Time-stamp: <2016-07-28 08:54:01 yaningliu>
 
 Author: Yaning Liu
 
@@ -67,17 +67,16 @@ class topic_modeling(object):
         self.save_topic_model = save_topic_model
         self.save_topic_model_name = save_topic_model_name
 
-    def get_topics(self, dict_list, product_id, id_type, review_col_name,
-                   ntopic=10, clean_reviews=False, POS_tagging=False,
+    def get_topics(self, dict_list, review_col_name,
+                   ntopic=100, clean_reviews=False, POS_tagging=False,
                    tagging_obj=None, noun_phrases=None):
         """Get the topics given a list of dictionaries, each list element
         is a cleaned text (a list of words), given the product id and id type
         show the top ntopic topics
 
-        :param dict_list: a list of dictionaries, each element is a list of words
+        :param dict_list: a list of dictionaries, each element is a list of
+        words
         :param ntopic: show only the top ntopic topics
-        :param product_id: string, the product id
-        :param id_type: string, the type of the id, e.g. asin
         :param review_col_name, string the key of the review text value
         :returns: one of the topic models (lsi, lda, ...), dictionary
         and corpus
@@ -89,28 +88,16 @@ class topic_modeling(object):
                      'can not be found in the dictionaries'
                      .format(review_col_name))
 
-        if product_id is not None and id_type is None or \
-           product_id is None and id_type is not None:
-            sys.exit('get_topics: both/neither product_id and id_type'
-                     ' should be provided!' .format(id_type))
-
-        if id_type is not None and id_type not in dict_list[0].keys():
-            sys.exit('get_topics: The specified id type {0} '
-                     'can not be found in the dictionaries'
-                     .format(id_type))
-
         # The criteria for distinguishing postive and negative
         pn_criteria = 'overall'
 
         # The review list of the product
         if self.PosNeg == 'positive':
             prod_text_list = [dic[review_col_name] for dic in dict_list
-                              if dic[id_type] == product_id and
-                              dic[pn_criteria] > 3.0]
+                              if dic[pn_criteria] > 3.0]
         elif self.PosNeg == 'negative':
             prod_text_list = [dic[review_col_name] for dic in dict_list
-                              if dic[id_type] == product_id and
-                              dic[pn_criteria] < 3.0]
+                              if dic[pn_criteria] < 3.0]
 
         if clean_reviews:
             prod_text_list = [rp.review_processing.
@@ -136,6 +123,9 @@ class topic_modeling(object):
             #     for nf in review:
             #         tmp += nf.split()
             #     prod_text_list.append(tmp)
+        elif POS_tagging and noun_phrases:
+            sys.exit('get_topics: POS_tagging and noun_phrases can '
+                     'not be both True!')
 
         dictionary = self.build_dictionary(prod_text_list, self.save_dict,
                                            self.save_dict_name)
@@ -343,9 +333,9 @@ class topic_modeling(object):
     def get_product_topic_dataframe(dict_list, product_id, id_type,
                                     review_col_name, model_type='LDA',
                                     clean_reviews=False,
-                                    clean_method='regular',
-                                    pos_tagging=False, tagging_obj=None,
-                                    noun_phrases=None,
+                                    clean_method='BeautifulSoup',
+                                    POS_tagging=False, tagging_obj=None,
+                                    noun_phrases=False,
                                     load_dictionary=True, dict_file_name=None,
                                     load_corpus=True, corpus_file_name=None,
                                     load_model=True, model_name=None):
@@ -359,7 +349,7 @@ class topic_modeling(object):
         :param clean_reviews: boolean, if cleaning reviews
         :param clean_method: the method to clean the reviews.
         'regular', 'POStag', 'ngrams'
-        :param pos_tagging: boolean, if pos_tagging. If, tagging, keep only
+        :param POS_tagging: boolean, if POS_tagging. If, tagging, keep only
         adjective, adverbs and nouns
         :param ngram_tagging: if None: not using ngram_tagging. If = 2 use
         2 gram tagging. if = 3, use 3 gram tagging
@@ -376,27 +366,31 @@ class topic_modeling(object):
         """
         if load_dictionary:
             dictionary = corpora.dictionary.Dictionary.load(dict_file_name)
+            print('dictionry loaded', flush=True)
         # if load_corpus:
         #     corpus = corpora.MmCorpus.load(corpus_file_name)
         if load_model and model_type == 'LDA':
-            topic_model = models.ldamodel.LdaModel.load(model_name)
+            topic_model = models.LdaModel.load(model_name)
+            print('topil model loaded', flush=True)
 
         if not clean_reviews:
             review_list = [dic[review_col_name] for dic in dict_list
                            if dic[id_type] == product_id]
         elif clean_reviews:
+            print('Cleaning reviews...', flush=True)
             raw_reviews = [dic[review_col_name] for dic in dict_list
                            if dic[id_type] == product_id]
             review_list = [rp.review_processing.
-                           review_str_to_wordlist(dic[review_col_name])
+                           review_str_to_wordlist(dic[review_col_name], clean_method)
                            for dic in dict_list if dic[id_type] == product_id]
+            print('Review cleaned', flush=True)
 
-        if pos_tagging and noun_phrases is None:
-            review_list = tagging_obj.get_pos_tagged_words(
+        if POS_tagging and not noun_phrases:
+            review_list = tagging_obj.get_pos_tagged_words_for_product(
                 review_list, POS=['adj', 'adv', 'noun'])
-        elif noun_phrases and not pos_tagging:
+        elif noun_phrases and not POS_tagging:
             from textblob import TextBlob
-            nouns_list = tagging_obj.get_pos_tagged_words(
+            nouns_list = tagging_obj.get_pos_tagged_words_for_product(
                 review_list, POS=['noun'])
             review_list = [TextBlob(' '.join(review)).noun_phrases
                            for review in review_list]
@@ -413,7 +407,7 @@ class topic_modeling(object):
             #     review_list.append(tmp)
 
         nreviews = len(review_list)
-
+        print('The number of reviews is: {}'.format(nreviews))
         dict_df = {'Review': [], 'Review #': [], 'TopicID': [],
                    'Topic prob': [], 'Words and weights': []}
         # dict_df = {'Review': [], 'TopicID': [],
@@ -421,18 +415,22 @@ class topic_modeling(object):
         df = pd.DataFrame()
 
         for i in range(nreviews):
+            print('Dealing with topic # {}'.format(i), flush=True)
             bow = dictionary.doc2bow(review_list[i])
             topic_ids = topic_model.get_document_topics(bow)
 
             TopicID = []
             TopicProb = []
             WordsWeights = []
+            count = 0
             for topic_id in topic_ids:
                 if not clean_reviews:
                     dict_df['Review'].append(' '.join(review_list[i]))
                 elif clean_reviews:
                     dict_df['Review'].append(raw_reviews[i])
                 dict_df['Review #'].append(i)
+                count += 1
+                print('Dealing with topic id # {}'.format(count), flush=True)
 
                 TopicID.append(topic_id[0])
                 TopicProb.append(topic_id[1])
@@ -441,7 +439,7 @@ class topic_modeling(object):
                                               .format(wp[1], wp[0])
                                               for wp in word_and_probs]))
 
-            # sort first
+            sort first
             sort_idx = np.argsort(TopicProb)[::-1]
             TopicID = list(np.array(TopicID)[sort_idx])
             TopicProb = list(np.array(TopicProb)[sort_idx])
