@@ -1,6 +1,6 @@
 """ This class deals with tagging (POS, NER) related functions
 
-Time-stamp: <2016-07-26 16:09:24 yaningliu>
+Time-stamp: <2016-07-27 16:27:44 yaningliu>
 
 Author: Yaning Liu
 Main used modules nltk
@@ -23,8 +23,8 @@ map_POS = {'adj': ['JJ', 'JJR', 'JJS'],
 
 class tagging:
 
-    def __init__(self, NER_model, NER_tagger, POS_model, POS_tagger,
-                 use_stanford):
+    def __init__(self, use_stanford=False, NER_model=None, NER_tagger=None,
+                 POS_model=None, POS_tagger=None):
         """The initializer of the class
 
         :param NER_model: NER model path
@@ -41,12 +41,16 @@ class tagging:
         self.use_stanford = use_stanford
 
         if use_stanford:
-            self.post = StanfordPOSTagger(self.POS_model, self.POS_tagger)
-            self.nert = StanfordNERTagger(self.NER_model, self.NER_tagger)
+            if NER_model is None or NER_tagger is None or POS_model is None \
+               or POS_tagger is None:
+                sys.exit('tagging initialization: Stanford models and taggers'
+                         ' have to be provided!')
+            else:
+                self.post = StanfordPOSTagger(self.POS_model, self.POS_tagger).tag
+                self.nert = StanfordNERTagger(self.NER_model, self.NER_tagger).tag
         else:
             self.post = nltk.pos_tag
-            self.nert = StanfordNERTagger(self.NER_model,
-                                          self.NER_tagger) # or nltk.ne_chunk
+            self.nert = nltk.ne_chunk
 
     def show_the_most_frequent_postags(self, dic_list, review_col_name, POS,
                                        product_id=None, id_type=None, topn=5):
@@ -94,13 +98,13 @@ class tagging:
         if product_id is not None and id_type is not None:
             for dic in dic_list:
                 if dic[id_type] == product_id:
-                    tagpairs = self.post.tag(dic[review_col_name])
+                    tagpairs = self.post(dic[review_col_name])
                     for tagpair in tagpairs:
                         if tagpair[1] in map_POS[POS]:
                             word_and_freq_dic.append(tagpair[0])
         elif product_id is None and id_type is None:
             for dic in dic_list:
-                tagpairs = self.post.tag(dic[review_col_name])
+                tagpairs = self.post(dic[review_col_name])
                 for tagpair in tagpairs:
                     if tagpair[1] in map_POS[POS]:
                         word_and_freq_dic.append(tagpair[0])
@@ -186,8 +190,7 @@ class tagging:
                              dict_list=None, review_col_name=None,
                              POS=['noun']):
         """Given a list of reviews, each review is a list of words,
-        and the POS (adj, none),
-        show all the word associate with the product and POS
+        and the POS (adj, none)
 
         :param dic_list: a list of dictionaries, the review of each
         dictionary is a list of words
@@ -215,16 +218,16 @@ class tagging:
                          'can not be found in the dictionaries'
                          .format(review_col_name))
 
-            if id_type is None or id_type not in dic_list[0].keys():
+            if id_type is None or id_type not in dict_list[0].keys():
                 sys.exit('get_pos_tagged_words: The specified id type {0} '
                          'can not be found in the dictionaries'
                          .format(id_type))
 
             pos_tagged_words = []
-            for dic in dic_list:
+            for dic in dict_list:
                 tagged_words = []
                 if dic[id_type] == product_id:
-                    tagpairs = self.post.tag(dic[review_col_name])
+                    tagpairs = self.post(dic[review_col_name])
                     for tagpair in tagpairs:
                         if tagpair[1] in tag_set:
                             tagged_words.append(tagpair[0])
@@ -235,10 +238,71 @@ class tagging:
             pos_tagged_words = []
             for review in review_list:
                 tagged_words = []
-                tagpairs = self.post.tag(review)
+                tagpairs = self.post(review)
                 for tagpair in tagpairs:
                     if tagpair[1] in tag_set:
                         tagged_words.append(tagpair[0])
                 pos_tagged_words.append(tagged_words)
 
         return pos_tagged_words
+
+    def get_pos_tagged_words_for_product(self, review_list, product_id=None,
+                                         id_type=None, dict_list=None,
+                                         review_col_name=None, POS=['noun']):
+          """Given a list of reviews, each review is a list of words,
+          and the POS (adj, none),
+          show all the word associate with the product and POS
+
+          :param dic_list: a list of dictionaries, the review of each
+          dictionary is a list of words
+          :param product_id: string, the product id
+          :param id_type: string, the type of the id, e.g. asin
+          :param POS: list, the part of speech, 'adj'/'noun'/'adv' are supported
+          :param review_col_name, string the key of the review text value
+          :returns: a list of list of words
+          :rtype: a list of list of words
+
+          """
+          for pos in POS:
+              if pos not in map_POS.keys():
+                  sys.exit('get_pos_tagged_words: The POS {} '
+                           'is not known'.format(pos))
+
+          tag_set = []
+          for pos in POS:
+              tag_set += map_POS[pos]
+
+          if dict_list is not None:
+              if review_col_name is None or \
+                 review_col_name not in dict_list[0].keys():
+                  sys.exit('get_pos_tagged_words: The specified key {0} '
+                           'can not be found in the dictionaries'
+                           .format(review_col_name))
+
+              if id_type is None or id_type not in dic_list[0].keys():
+                  sys.exit('get_pos_tagged_words: The specified id type {0} '
+                           'can not be found in the dictionaries'
+                           .format(id_type))
+
+              pos_tagged_words = []
+              for dic in dic_list:
+                  tagged_words = []
+                  if dic[id_type] == product_id:
+                      tagpairs = self.post(dic[review_col_name])
+                      for tagpair in tagpairs:
+                          if tagpair[1] in tag_set:
+                              tagged_words.append(tagpair[0])
+                  pos_tagged_words.append(tagged_words)
+          elif review_list is None:
+              sys.exit('get_pos_tagged_words: Review_list can not be None!')
+          else:
+              pos_tagged_words = []
+              for review in review_list:
+                  tagged_words = []
+                  tagpairs = self.post(review)
+                  for tagpair in tagpairs:
+                      if tagpair[1] in tag_set:
+                          tagged_words.append(tagpair[0])
+                  pos_tagged_words.append(tagged_words)
+
+          return pos_tagged_words
