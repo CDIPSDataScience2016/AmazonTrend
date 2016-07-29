@@ -1,6 +1,6 @@
 """ This code does sentiment analysis
 
-Time-stamp: <2016-07-23 01:12:55 yaning>
+Time-stamp: <2016-07-28 16:52:30 yaning>
 
 Author: Yaning Liu
 Main used modules are nltk, beautifulsoup, scikit-learn, pandas
@@ -28,6 +28,7 @@ from sklearn.learning_curve import learning_curve
 from sklearn import cross_validation
 import operator
 import sklearn.metrics
+import xgboost as xgb
 
 
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s',
@@ -43,7 +44,7 @@ class sentiment_analysis:
         'BagOfWords', 'Word2Vec', 'BagOfCentroids'
         :param ML_method: the Maching learning methods used, e.g.,
         'RandomForest', 'LogisticRegression', 'MultinomialNB', SGDClassifier
-        'SVM'
+        'SVM', 'XGBoost'
         :param maxfeature: the maximum number of features
         :param maxfeature: the maximum number of feature to use
         :param nltk_path: the nltk path to append
@@ -243,6 +244,13 @@ class sentiment_analysis:
             self.SVM_model = self.SVM_model.fit(
                 self.train_data_features, sentiment)
             self.ML_model = self.SVM_model
+        elif self.ML_method == 'XGBoost':
+            print('Training the data with XGBoost classifier...',
+                  flush=True)
+            self.XGB_model = xgb(objective='binary:logicstic', nthread=self.pool_size)
+            self.XGB_model = self.XGB_model.train(
+                self.train_data_features, sentiment, num_round=2)
+            self.ML_model = self.XGB_model
 
     def predict_ML_model(self, test_data_features):
         """Machine learning predition
@@ -271,6 +279,8 @@ class sentiment_analysis:
             sentiment_pred = self.SGD_model.predict(test_data_features)
         elif self.ML_method == 'SVM':
             sentiment_pred = self.SVM_model.predict(test_data_features)
+        elif self.ML_method == 'XGB':
+            sentiment_pred = self.XGB_model.predict(test_data_features)
         else:
             sys.exit('predict_ML_model: ML_method not known!')
 

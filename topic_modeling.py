@@ -1,6 +1,6 @@
 """ This class deals with topic modeling.
 
-Time-stamp: <2016-07-28 16:04:32 yaningliu>
+Time-stamp: <2016-07-28 22:42:16 yaningliu>
 
 Author: Yaning Liu
 
@@ -25,16 +25,28 @@ import review_processing as rp
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s',
                     level=logging.INFO)
 
-asin_dic = {'B0074BW614': 'Kindle Fire HD 7',
-            'B00DR0PDNE': 'Google Chromecast HDMI Streaming Media Player',
-            'B007WTAJTO': 'SanDisk Ultra 64GB MicroSDXC',
-            'B0019EHU8G': 'Mediabridge ULTRA Series HDMI Cable (6 Feet)',
-            'B006GWO5WK': 'Amazon Kindle PowerFast adapter',
-            'B003ELYQGG': 'Panasonic RPHJE120D In-Ear Headphone',
-            'B003ES5ZUU': 'AmazonBasics High-Speed HDMI Cable-15 Feet',
-            'B007R5YDYA': 'Kindle protective cover',
-            'B00622AG6S': 'PowerGen Dual USB Car charger for mobile Devices',
-            'B0002L5R78': 'DVI Gear HDMI Cable 2M 6 feet'}
+# my top 10
+# asin_dic = {'B0074BW614': 'Kindle Fire HD 7',
+#             'B00DR0PDNE': 'Google Chromecast HDMI Streaming Media Player',
+#             'B007WTAJTO': 'SanDisk Ultra 64GB MicroSDXC',
+#             'B0019EHU8G': 'Mediabridge ULTRA Series HDMI Cable (6 Feet)',
+#             'B006GWO5WK': 'Amazon Kindle PowerFast adapter',
+#             'B003ELYQGG': 'Panasonic RPHJE120D In-Ear Headphone',
+#             'B003ES5ZUU': 'AmazonBasics High-Speed HDMI Cable-15 Feet',
+#             'B007R5YDYA': 'Kindle protective cover',
+#             'B00622AG6S': 'PowerGen Dual USB Car charger for mobile Devices',
+#             'B0002L5R78': 'DVI Gear HDMI Cable 2M 6 feet'}
+# top 10
+asin_dic = {'B0074BW614': 'Kindle Fire',
+            'B00DR0PDNE': 'Google Chromecast',
+            'B007WTAJTO': 'SanDisk Memory Card',
+            'B006GWO5WK': 'Kindle Powerfast Charger',
+            'B007R5YDYA': 'Kindle Paperwhite Case',
+            'B00622AG6S': 'Powergen Car Charger',
+            'B008OHNZI0': 'Privacy Screen for IPhone 5',
+            'B009SYZ8OC': 'USB to Lightning Cable',
+            'B00BGA9WK2': 'Sony PlayStation 4',
+            'B004QK7HI8': 'Mohu Leaf 30 TV Antenna'}
 
 class topic_modeling(object):
 
