@@ -1,6 +1,6 @@
 """ This class deals with topic modeling.
 
-Time-stamp: <2016-07-28 22:42:16 yaningliu>
+Time-stamp: <2016-07-29 13:43:23 yaningliu>
 
 Author: Yaning Liu
 
@@ -21,6 +21,7 @@ import sys
 from multiprocessing import Pool
 import pandas as pd
 import review_processing as rp
+import re
 
 logging.basicConfig(format='%(asctime)s : %(levelname)s : %(message)s',
                     level=logging.INFO)
@@ -125,29 +126,21 @@ class topic_modeling(object):
             prod_text_list = [rp.review_processing.
                               review_str_to_wordlist(text, 'BeautifulSoup')
                               for text in prod_text_list]
-        if POS_tagging and not noun_phrases:
+        if POS_tagging:
+            if not clean_reviews:
+                sys.exit('get_topics: have to clean reviews!')
             prod_text_list = tagging_obj.get_pos_tagged_words(
                 prod_text_list, POS=['adj', 'adv', 'noun'])
-        elif not POS_tagging and noun_phrases:
-            nouns_list = tagging_obj.get_pos_tagged_words(
-                prod_text_list, POS=['noun'])
-            from textblob import TextBlob
-            prod_text_list = [TextBlob(' '.join(text)).noun_phrases
-                              for text in prod_text_list]
-            for i in range(len(prod_text_list)):
-                prod_text_list[i] += nouns_list[i]
 
-            # prod_text_list_tmp = [TextBlob(' '.join(text)).noun_phrases
-            #                       for text in prod_text_list]
-            # prod_text_list = []
-            # for review in prod_text_list_tmp:
-            #     tmp = []
-            #     for nf in review:
-            #         tmp += nf.split()
-            #     prod_text_list.append(tmp)
-        elif POS_tagging and noun_phrases:
-            sys.exit('get_topics: POS_tagging and noun_phrases can '
-                     'not be both True!')
+        if noun_phrases:
+            if POS_tagging or clean_reviews:
+                sys.exit('get_topics: If using noun_phrases, no POS_tagging '
+                         'or clean_reviews')
+            prod_text_list = [re.sub(r'([,.!?])([a-zA-Z])', r'\1 \2', text)
+                              for text in prod_text_list]
+            from textblob import TextBlob
+            prod_text_list = [TextBlob(text).noun_phrases
+                              for text in prod_text_list]
 
         dictionary = self.build_dictionary(prod_text_list, self.save_dict,
                                            self.save_dict_name)
@@ -543,3 +536,152 @@ class topic_modeling(object):
             df = pd.concat((df, df_tmp))
 
         return df
+
+    @staticmethod
+    def get_topic_models_for_all_prod(dict_list, review_col_name,
+                                      model_type='LDA', load_dictionary=True,
+                                      pos_dict_file_name=None,
+                                      neg_dict_file_name=None,
+                                      load_corpus=True,
+                                      pos_corpus_file_name=None,
+                                      neg_corpus_file_name=None,
+                                      load_model=True,
+                                      pos_model_file_name=None,
+                                      neg_model_file_name=None):
+        """Get the topics for all the product and turn it into a data frame
+
+        :param dict_list: a list of dictionaries
+        :param review_col_name: the column name of the review
+        :param model_type: the type of topic modeling
+        :param clean_reviews: boolean, if cleaning reviews
+        :param clean_method: the method to clean the reviews.
+        :param load_dictionary: bool, if loading dictioanry
+        :param dict_file_name: the file name of the dictionary if loading
+        :param load_corpus: bool, if loading corpus
+        :param corpus_file_name: the file name of the corpus if loading
+        :param load_model: bool, if loading the topic model
+        :param model_name: the file name of the topic model, if loading
+        :returns: df, the topics are sorted in descending order by topic
+        probability
+        :rtype: a data frame
+
+        """
+
+        # if load_dictionary:
+        #     pos_dictionary = corpora.dictionary.Dictionary.load(
+        #         pos_dict_file_name)
+        #     neg_dictionary = corpora.dictionary.Dictionary.load(
+        #         neg_dict_file_name)
+        # print('dictionry loaded', flush=True)
+
+        if load_corpus:
+            pos_corpus = corpora.MmCorpus(pos_corpus_file_name)
+            neg_corpus = corpora.MmCorpus(neg_corpus_file_name)
+        if load_model and model_type == 'LDA':
+            pos_topic_model = models.LdaModel.load(pos_model_file_name)
+            neg_topic_model = models.LdaModel.load(neg_model_file_name)
+            print('topic model loaded', flush=True)
+
+        pn_dict_list = [dic for dic in dict_list if dic['overall'] != 3]
+        nreviews = len(pn_dict_list)
+        pos_nreviews = len([dic for dic in pn_dict_list if dic['overall'] > 3])
+        neg_nreviews = len([dic for dic in pn_dict_list if dic['overall'] < 3])
+        print('get_topic_models_for_all_prod: The numbers of positive'
+              ' and negative reviews are: {} and {}'
+              .format(pos_nreviews, neg_nreviews))
+        if len(pos_corpus) == pos_nreviews and len(neg_corpus) == neg_nreviews:
+            print('get_topic_models_for_all_prod: the numbers of pos and neg '
+                  'reviews are in accordance to the corpus.')
+        else:
+            sys.exit('get_topic_models_for_all_prod: the numbers of pos and '
+                     'neg reviews are NOT in accordance to the corpus')
+
+        dict_review = {'Reviews': [None]*nreviews, 'ProductID': [None]*nreviews,
+                       'Sentiment': [None]*nreviews,
+                       'TopicID_and_Prob': [None]*nreviews}
+
+        pos_rev_count = 0
+        neg_rev_count = 0
+        count = 0
+        for i in range(nreviews):
+            if not i % 100:
+                print('Dealing with review # {}'.format(i), flush=True)
+
+            dict_review['Reviews'][count] = pn_dict_list[i][review_col_name]
+            dict_review['ProductID'][count] = pn_dict_list[i]['asin']
+            sentiment = 1 if pn_dict_list[i]['overall'] > 3 else 0
+            dict_review['Sentiment'][count] = sentiment
+            if sentiment:
+                topic_ids = pos_topic_model.get_document_topics(
+                    pos_corpus[pos_rev_count])
+                pos_rev_count += 1
+            else:
+                topic_ids = neg_topic_model.get_document_topics(
+                    neg_corpus[neg_rev_count])
+                neg_rev_count += 1
+            if topic_ids:
+                ID_Prob = list(zip(*topic_ids))
+                TopicID = ID_Prob[0]
+                TopicProb = ID_Prob[1]
+
+                sort_idx = np.argsort(TopicProb)[::-1]
+                TopicID = list(np.array(TopicID)[sort_idx])
+                TopicProb = list(np.array(TopicProb)[sort_idx])
+
+                dict_review['TopicID_and_Prob'][count] = list(zip(TopicID,
+                                                                  TopicProb))
+            else:
+                dict_review['TopicID_and_Prob'][count] = []
+
+            count += 1
+
+        ntopics_pos = pos_topic_model.num_topics
+        ntopics_neg = neg_topic_model.num_topics
+        dict_topic = {'Topic_ID': [None]*(ntopics_pos+ntopics_neg),
+                      'Sentiment': [None]*(ntopics_pos+ntopics_neg),
+                      'Words_and_Weights': [None]*(ntopics_pos+ntopics_neg),
+                      'Reviews': [None]*(ntopics_pos+ntopics_neg)}
+        count = 0
+        for i in range(ntopics_pos):
+            if not i % 10:
+                print('Dealing with positive topic # {}'.format(i),
+                      flush=True)
+            word_and_probs = pos_topic_model.show_topic(i, 10)
+            dict_topic['Topic_ID'][count] = i
+            dict_topic['Sentiment'][count] = 1
+            dict_topic['Words_and_Weights'][count] = word_and_probs
+
+            reviews = []
+            for ii in range(nreviews):
+                if dict_review['Sentiment'][ii]:
+                    for TIDP in dict_review['TopicID_and_Prob'][ii]:
+                        if TIDP[0] == i:
+                            reviews.append([ii, TIDP[1]])
+            # sort reviews based on probability
+            reviews = sorted(reviews, key=lambda x: x[1], reverse=True)
+            dict_topic['Reviews'][count] = reviews
+            count += 1
+
+        for i in range(ntopics_neg):
+            if not i % 10:
+                print('Dealing with negative topic # {}'.format(i),
+                      flush=True)
+            word_and_probs = neg_topic_model.show_topic(i, 10)
+            dict_topic['Topic_ID'][count] = i
+            dict_topic['Sentiment'][count] = 0
+            dict_topic['Words_and_Weights'][count] = word_and_probs
+
+            reviews = []
+            for ii in range(nreviews):
+                if not dict_review['Sentiment'][ii]:
+                    for TIDP in dict_review['TopicID_and_Prob'][ii]:
+                        if TIDP[0] == i:
+                            reviews.append([ii, TIDP[1]])
+            # sort reviews based on probability
+            reviews = sorted(reviews, key=lambda x: x[1], reverse=True)
+            dict_topic['Reviews'][count] = reviews
+            count += 1
+
+        dict_review = pd.DataFrame.from_dict(dict_review)
+        dict_topic = pd.DataFrame.from_dict(dict_topic)
+        return dict_review, dict_topic
